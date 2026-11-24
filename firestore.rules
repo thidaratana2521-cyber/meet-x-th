@@ -2,15 +2,18 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     function signedIn() { return request.auth != null; }
+
     function friendRequestPath(a, b) {
       return /databases/$(database)/documents/friendRequests/$(a + '__' + b);
     }
+
     function areFriends(a, b) {
       return (exists(friendRequestPath(a, b))
               && get(friendRequestPath(a, b)).data.status == 'accepted')
           || (exists(friendRequestPath(b, a))
               && get(friendRequestPath(b, a)).data.status == 'accepted');
     }
+
     function isThreadMember(threadId) {
       return signedIn()
         && exists(/databases/$(database)/documents/threads/$(threadId))
@@ -18,6 +21,7 @@ service cloud.firestore {
     }
 
     match /users/{userId} {
+      // User documents contain public profile fields only (uid, name, avatar).
       allow read: if signedIn();
       allow create: if signedIn() && request.auth.uid == userId
         && request.resource.data.uid == userId
@@ -42,6 +46,7 @@ service cloud.firestore {
       allow read: if signedIn()
         && (resource.data.requesterUid == request.auth.uid
             || resource.data.recipientUid == request.auth.uid);
+
       allow create: if signedIn()
         && request.resource.data.requesterUid == request.auth.uid
         && request.resource.data.recipientUid is string
@@ -49,13 +54,24 @@ service cloud.firestore {
         && request.resource.data.status == 'pending'
         && requestId == request.resource.data.requesterUid + '__' + request.resource.data.recipientUid
         && exists(/databases/$(database)/documents/users/$(request.resource.data.recipientUid));
+
+      // Receiver can accept/reject a pending request. A sender can re-send after rejection.
       allow update: if signedIn()
-        && resource.data.recipientUid == request.auth.uid
-        && resource.data.status == 'pending'
         && request.resource.data.requesterUid == resource.data.requesterUid
         && request.resource.data.recipientUid == resource.data.recipientUid
-        && request.resource.data.status in ['accepted', 'rejected']
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt']);
+        && request.resource.data.status == 'pending'
+        && requestId == resource.data.requesterUid + '__' + resource.data.recipientUid
+        && (
+          (resource.data.recipientUid == request.auth.uid
+            && resource.data.status == 'pending'
+            && request.resource.data.status in ['accepted', 'rejected']
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt']))
+          ||
+          (resource.data.requesterUid == request.auth.uid
+            && resource.data.status == 'rejected'
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt', 'createdAt']))
+        );
+
       allow delete: if signedIn()
         && resource.data.requesterUid == request.auth.uid
         && resource.data.status == 'pending';
