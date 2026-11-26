@@ -4,14 +4,14 @@ import {
   onAuthStateChanged,
   signInWithEmailAndPassword,
   signOut
-} from "firebase/auth";
+} from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
 import {
   getFirestore,
   collection,
   addDoc,
   getDocs,
   serverTimestamp
-} from "firebase/firestore";
+} from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
 
 const status = document.querySelector("#firebase-status");
 if (status) {
